@@ -1,0 +1,144 @@
+name: Tests
+on:
+  pull_request:
+  push:
+    branches:
+      - trunk
+
+jobs:
+  build:
+    name: Build Test Artifacts
+    runs-on: ubuntu-latest
+    env:
+      MIX_ENV: test
+
+    steps:
+      -
+        uses: actions/checkout@v4
+      -
+        name: Setup Erlang and Elixir
+        uses: erlef/setup-beam@v1.17
+        with:
+          elixir-version: "1.17.2-otp-27"
+          otp-version: "27.0.1"
+      -
+        name: Mix and build cache
+        uses: actions/cache@v4
+        with:
+          key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+          path: |
+            deps
+            _build
+          restore-keys: ${{ runner.os }}-mix-
+      -
+        name: Fetch dependencies and compile code.
+        run: |
+          mix do deps.get, compile --warnings-as-errors
+
+  test:
+    name: 'Run tests'
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      MIX_ENV: test
+
+    services:
+      db:
+        image: postgres:16-alpine
+        ports: ["5432:5432"]
+        env:
+          POSTGRES_DB: immortal_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+
+    strategy:
+      matrix:
+        partition: [1,2]
+
+    steps:
+      -
+        uses: actions/checkout@v4
+      -
+        name: Setup Erlang and Elixir
+        uses: erlef/setup-beam@v1.17
+        with:
+          elixir-version: "1.17.2-otp-27"
+          otp-version: "27.0.1"
+      -
+        name: Mix and build cache
+        uses: actions/cache@v4
+        with:
+          key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+          path: |
+            deps
+            _build
+          restore-keys: ${{ runner.os }}-mix-
+      -
+        name: Get dependencies
+        run: mix deps.get
+      -
+        name: Tests
+        run: mix test --cover --partitions 2
+        env:
+          MIX_TEST_PARTITION: ${{ matrix.partition }}
+      -
+        name: Upload coverage data.
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.partition }}
+          path: cover/${{ matrix.partition }}.coverdata
+          retention-days: 1
+
+  coverage:
+    name: 'Generate and report coverage'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      MIX_ENV: test
+
+    services:
+      db:
+        image: postgres:16-alpine
+        ports: ["5432:5432"]
+        env:
+          POSTGRES_DB: immortal_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+
+    steps:
+      -
+        uses: actions/checkout@v4
+      -
+        name: Setup Erlang and Elixir
+        uses: erlef/setup-beam@v1.17
+        with:
+          elixir-version: "1.17.2-otp-27"
+          otp-version: "27.0.1"
+      -
+        name: Mix and build cache
+        uses: actions/cache@v4
+        with:
+          key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+          path: |
+            deps
+            _build
+          restore-keys: ${{ runner.os }}-mix-
+      -
+        name: Download coverage data
+        uses: actions/download-artifact@v4
+      -
+        name: Generate coverage
+        run: |
+          mix coveralls.html --exclude test --import-cover cover
+          echo "## Test Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          mix coveralls -v --exclude test --import-cover cover | awk -f infra/parse_coverage_summary.awk >> $GITHUB_STEP_SUMMARY
+      -
+        if: always()
+        name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-coverage-report
+          path: cover/excoveralls.html
