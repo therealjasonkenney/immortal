@@ -16,13 +16,17 @@ ARG RUNNER_IMAGE="debian:${DEBIAN_VERSION}"
 # Used for compiling elixir code into BEAM.
 FROM ${BUILDER_IMAGE} AS builder
 
+WORKDIR /app
+
 # Install build dependencies
 RUN apt-get update -y \
  && apt-get install -y \
     build-essential \
     git \
  && apt-get clean \
- && rm -rf /var/lib/apt/lists/*_*
+ && rm -rf /var/lib/apt/lists/*_* \
+ && mix do local.hex --force, local.rebar --force \
+ && mkdir -p /app/config
 
 # Used to run the compiled BEAM code.
 FROM ${RUNNER_IMAGE} AS runner
