@@ -1,4 +1,5 @@
 defmodule Immortal.MixProject do
+  alias Immortal.Mailer
   use Mix.Project
 
   def project do
@@ -9,8 +10,8 @@ defmodule Immortal.MixProject do
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
-      deps: deps(),
-      test_coverage: [tool: ExCoveralls],
+      deps: framework() ++ deps() ++ tools(),
+      test_coverage: [tool: ExCoveralls]
     ]
   end
 
@@ -29,21 +30,72 @@ defmodule Immortal.MixProject do
   defp elixirc_paths(_), do: ["lib"]
 
   # Specifies your project dependencies.
-  #
+  # (outside the default ones (framework) or dev tools.
   # Type `mix help deps` for examples and options.
   defp deps do
     [
+      {:guardian, "~> 2.3"}
+    ]
+  end
+
+  # Dev and CI tools.
+  defp tools do
+    [
+      # Static analysis.
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      # Test coverage.
+      {:excoveralls, "~> 0.18", only: :test},
+      # Reload phoenix after changing code w/o restart.
+      {:phoenix_live_reload, "~> 1.2", only: :dev}
+    ]
+  end
+
+  # Changing these dependencies would
+  # require some refactoring as Phoenix hooks everything
+  # up with these in mind.
+  defp framework do
+    [
+      # Phoenix Framework
+      # lib/immortal/application.ex
       {:phoenix, "~> 1.7.14"},
       {:phoenix_ecto, "~> 4.5"},
       {:ecto_sql, "~> 3.10"},
-      {:postgrex, ">= 0.0.0"},
+
+      # Phoenix Web
+      # lib/immortal_web.ex
       {:phoenix_html, "~> 4.1"},
-      {:phoenix_live_reload, "~> 1.2", only: :dev},
-      # TODO bump on release to {:phoenix_live_view, "~> 1.0.0"},
       {:phoenix_live_view, "~> 1.0.0-rc.1", override: true},
-      {:floki, ">= 0.30.0", only: :test},
+
+      # Telemetry
       {:phoenix_live_dashboard, "~> 0.8.3"},
+      {:telemetry_metrics, "~> 1.0"},
+      {:telemetry_poller, "~> 1.0"},
+
+      # Localization
+      {:gettext, "~> 0.20"},
+
+      # JSON parser/encoder
+      {:jason, "~> 1.2"},
+
+      # Database
+      {:postgrex, ">= 0.0.0"},
+
+      # Node discovery
+      {:dns_cluster, "~> 0.1.1"},
+
+      # HTTP Server
+      {:bandit, "~> 1.5"},
+
+      # Mailer
+      {:swoosh, "~> 1.5"},
+
+      # HTTP Client for Mailer.
+      {:finch, "~> 0.13"},
+
+      # JS compilation.
       {:esbuild, "~> 0.8", runtime: Mix.env() == :dev},
+
+      # Tailwind CSS Framework
       {:tailwind, "~> 0.2", runtime: Mix.env() == :dev},
       {:heroicons,
        github: "tailwindlabs/heroicons",
@@ -52,15 +104,9 @@ defmodule Immortal.MixProject do
        app: false,
        compile: false,
        depth: 1},
-      {:swoosh, "~> 1.5"},
-      {:finch, "~> 0.13"},
-      {:telemetry_metrics, "~> 1.0"},
-      {:telemetry_poller, "~> 1.0"},
-      {:gettext, "~> 0.20"},
-      {:jason, "~> 1.2"},
-      {:dns_cluster, "~> 0.1.1"},
-      {:bandit, "~> 1.5"},
-      {:excoveralls, "~> 0.18", only: :test}
+
+      # HTML node searching for tests.
+      {:floki, ">= 0.30.0", only: :test}
     ]
   end
 
